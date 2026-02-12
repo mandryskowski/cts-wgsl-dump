@@ -30,7 +30,7 @@ jobs:
 
       - name: Dump tests
         continue-on-error: true
-        run: node out-node/common/runtime/cmdline.js   --gpu-provider $(pwd)/fake-gpu.js   --verbose   "webgpu:shader,execution,expression,call,builtin,extractBits:u32:*"
+        run: node out-node/common/runtime/cmdline.js   --gpu-provider $(pwd)/fake-gpu.js   --verbose   "webgpu:shader,execution,expression,call,builtin,*"
 
       - name: Upload Dump Artifact
         if: always()
