@@ -1246,12 +1246,14 @@ async function buildPipeline(
         serializationError = true;
       }
     } else {
-      console.log(`Case ${i} expectation is not a concrete Value.`);
+      serializationError = true;
     }
   });
 
   if (!serializationError) {
     dumpToFile(t.rec.testName, `[${expectedBytes.join(', ')}]`, '.expected.out.json');
+  } else {
+    console.log(`Skipping expected output for ${t.rec.testName} since it contains non-concrete comparators`)
   }
 
   switch (inputSource) {
