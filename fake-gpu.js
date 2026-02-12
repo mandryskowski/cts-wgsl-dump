@@ -78,6 +78,10 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
             resolveLost({ reason: 'destroyed', message: 'Device destroyed' });
         },
 
+        features: {
+          has: (x) => {return true}
+        },
+
         lost: lostPromise,
 
         queue: {

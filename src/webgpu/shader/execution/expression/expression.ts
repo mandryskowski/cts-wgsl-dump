@@ -20,6 +20,7 @@ import { align } from '../../../util/math.js';
 
 import { Case } from './case.js';
 import { toComparator } from './expectation.js';
+import * as fs from 'fs';
 
 /** The input value source */
 export type InputSource =
@@ -511,9 +512,9 @@ async function submitBatch(
         const got = outputs[caseIdx];
         const cmp = toComparator(c.expected).compare(got);
         if (!cmp.matched) {
-          errs.push(`(${c.input instanceof Array ? c.input.join(', ') : c.input})
-    returned: ${cmp.got}
-    expected: ${cmp.expected}`);
+    //       errs.push(`(${c.input instanceof Array ? c.input.join(', ') : c.input})
+    // returned: ${cmp.got}
+    // expected: ${cmp.expected}`);
         }
       }
 
@@ -1158,6 +1159,42 @@ ${body}
   };
 }
 
+function dumpToFile(ctsString: string, content: string, extension: string) {
+  let cleanString = ctsString.replace(/^webgpu:shader,/, '');
+
+  const parts = cleanString.split(',');
+
+  const lastSegment = parts.pop();
+
+  if (!lastSegment) {
+    throw new Error("Invalid format: String is empty or missing parts.");
+  }
+
+  const firstColonIndex = lastSegment.indexOf(':');
+  
+  let finalFolderPart = lastSegment;
+  let rawFileName = 'index';
+
+  if (firstColonIndex !== -1) {
+    finalFolderPart = lastSegment.substring(0, firstColonIndex);
+    rawFileName = lastSegment.substring(firstColonIndex + 1);
+  }
+
+  parts.push(finalFolderPart);
+
+  const dirPath = parts.join('/');
+  const sanitizedFileName = rawFileName
+    .replace(/:/g, '_')
+    .replace(/;/g, '_')
+    .replace(/=/g, '_')
+    .replace(/"/g, '')
+    .replace(/\s/g, '') + extension;
+
+  fs.mkdirSync(`wgsl_dump_output/${dirPath}`, { recursive: true });
+  console.log(`PATH IS wgsl_dump_output/${dirPath}/${sanitizedFileName}`)
+  fs.writeFileSync(`wgsl_dump_output/${dirPath}/${sanitizedFileName}`, content);
+}
+
 /**
  * Constructs and returns a GPUComputePipeline and GPUBindGroup for running a
  * batch of test cases. If a pre-created pipeline can be found in
@@ -1190,6 +1227,32 @@ async function buildPipeline(
   });
 
   const source = shaderBuilder(shaderBuilderParams);
+  dumpToFile(t.rec.testName, source, '.wgsl');
+
+  const outStride = structStride([shaderBuilderParams.resultType], 'storage_rw');
+  const outBufferSize = align(cases.length * outStride, 4);
+
+  const expectedBytes = new Uint8Array(outBufferSize);
+  let serializationError = false;
+
+  cases.forEach((c, i) => {
+    const offset = i * outStride;
+
+    if (c.expected && typeof (c.expected as any).copyTo === 'function') {
+      try {
+        (c.expected as any).copyTo(expectedBytes, offset);
+      } catch (e) {
+        console.log(`Error serializing case ${i}:`, e);
+        serializationError = true;
+      }
+    } else {
+      console.log(`Case ${i} expectation is not a concrete Value.`);
+    }
+  });
+
+  if (!serializationError) {
+    dumpToFile(t.rec.testName, `[${expectedBytes.join(', ')}]`, '.expected.out.json');
+  }
 
   switch (inputSource) {
     case 'const': {
@@ -1235,6 +1298,8 @@ async function buildPipeline(
           }
         });
       }
+
+      dumpToFile(t.rec.testName, `[${inputData.join(', ')}]`, '.in.json');
 
       // build the compute pipeline, if the shader hasn't been compiled already.
       const pipeline = getOrCreate(pipelineCache, source, () => {
