@@ -1,5 +1,5 @@
 const fs = require('fs');
-function dumpToFile(ctsString, content, extension) {
+function dumpToFile(ctsString, content, extension, mergeFunction = null) {
   const sanitizeFS = (str) => {
     return str
       .replace(/:/g, '_')
@@ -42,7 +42,13 @@ function dumpToFile(ctsString, content, extension) {
 
   fs.mkdirSync(fullDirPath, { recursive: true });
   console.log(`PATH IS ${fullFilePath}`);
-  fs.writeFileSync(fullFilePath, content);
+  if (typeof mergeFunction === 'function' && fs.existsSync(fullFilePath)) {
+    let previousContent = fs.readFileSync(fullFilePath, 'utf8');
+    const finalContent = mergeFunction(previousContent, content);
+    fs.writeFileSync(fullFilePath, finalContent);
+  } else {
+    fs.writeFileSync(fullFilePath, content);
+  }
 }
 
 global.GPUBufferUsage = {
@@ -162,6 +168,7 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
         createBuffer: (descriptor) => {
             const size = descriptor.size || 0;
             const buffer = new ArrayBuffer(size);
+            console.log(descriptor)
 
             return {
                 destroy: () => {},
@@ -169,13 +176,14 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
                 getMappedRange: (offset, rangeSize) => {
                     return buffer;
                 },
-                unmap: () => {
+                unmap() {
                   if (!!descriptor.mappedAtCreation) {
-                    dumpToFile(testName, `{"0:1":[${new Uint8Array(buffer).join(', ')}]}`, '.in.json');
+                    this.data = new Uint8Array(buffer);
                   }
                 },
                 size: size,
                 usage: descriptor.usage || 0,
+                data: null
             };
         },
 
@@ -200,7 +208,17 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
 
         createBindGroupLayout: () => new global.GPUBindGroupLayout(),
         createPipelineLayout: () => new global.GPUPipelineLayout(),
-        createBindGroup: () => {},
+        createBindGroup: (x) => {
+          console.log("dupa", x.entries);
+          for (const entry of x.entries) {
+            if (entry.resource.buffer.data !== null) {
+              dumpToFile(testName, `{"0:${entry.binding}": [${entry.resource.buffer.data.join(', ')}]}`, '.in.json',
+                (prev, cur) => { return "{" + prev.substring(1, prev.length-1) + ", " + cur.substring(1, cur.length-1) + "}"; }
+              );
+            }
+          }
+          return new global.GPUBindGroupLayout();
+        },
         createCommandEncoder: () => ({
             finish: () => ({}),
             beginComputePass: () => ({
