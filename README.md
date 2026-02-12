@@ -1,22 +1,12 @@
-# WebGPU Conformance Test Suite
+# WebGPU CTS shader dump
 
-This is the conformance test suite for WebGPU.
-It tests the behaviors defined by the [WebGPU specification](https://gpuweb.github.io/gpuweb/).
+This fork runs the WebGPU CTS with a simple fake WebGPU implementation with the goal to dump most of the test suite's shaders, in particular:
+- Their source code (in WGSL)
+- The input buffer intended to be passed to the shader, if specified in the test case
+- The expected output buffer of the shader, only if simple concrete comparators are used in the test case (see https://github.com/mandryskowski/cts-wgsl-dump/issues/4)
 
-The contents of this test suite are considered **normative**; implementations must pass
-them to be WebGPU-conformant. Mismatches between the specification and tests are bugs.
+We focus on the WGSL part of the CTS, which is `webgpu:shader,*`.
 
-This test suite can be embedded inside [WPT](https://github.com/web-platform-tests/wpt) or run in standalone.
-
-## [Launch the standalone CTS runner / test plan viewer](https://gpuweb.github.io/cts/standalone/)
-
-## Contributing
-
-Please read the [introductory guidelines](docs/intro/README.md) before contributing.
-Other documentation may be found in [`docs/`](docs/) and in the [helper index](https://gpuweb.github.io/cts/docs/tsdoc/) ([source](docs/helper_index.txt)).
-
-Read [CONTRIBUTING.md](CONTRIBUTING.md) on licensing.
-
-For realtime communication about WebGPU spec and test, join the
-[#WebGPU:matrix.org room](https://app.element.io/#/room/#WebGPU:matrix.org)
-on Matrix.
+This fork is
+1. **hacky** - the aim is _not_ to add the WGSL dump feature to the CTS, just make it work with a small amount of code to reduce the maintenance burden. 
+2. **lightweight** - it uses a fake WebGPU implementation, to avoid the need to build a real one (like dawn or wgpu). This fake implementation just needs to make the CTS happy up to the point where we can dump the shaders.
