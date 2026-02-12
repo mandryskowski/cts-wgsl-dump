@@ -1160,6 +1160,17 @@ ${body}
 }
 
 function dumpToFile(ctsString: string, content: string, extension: string) {
+  const sanitizeFS = (str: string) => {
+    return str
+      .replace(/:/g, '_')
+      .replace(/;/g, '_')
+      .replace(/=/g, '_')
+      .replace(/"/g, '')
+      .replace(/'/g, '')
+      .replace(/[<>|*?]/g, '_')
+      .replace(/\s/g, '');
+  };
+
   let cleanString = ctsString.replace(/^webgpu:shader,/, '');
 
   const parts = cleanString.split(',');
@@ -1182,17 +1193,16 @@ function dumpToFile(ctsString: string, content: string, extension: string) {
 
   parts.push(finalFolderPart);
 
-  const dirPath = parts.join('/');
-  const sanitizedFileName = rawFileName
-    .replace(/:/g, '_')
-    .replace(/;/g, '_')
-    .replace(/=/g, '_')
-    .replace(/"/g, '')
-    .replace(/\s/g, '') + extension;
+  const sanitizedDirPath = parts.map(p => sanitizeFS(p)).join('/');
+  
+  const sanitizedFileName = sanitizeFS(rawFileName) + extension;
 
-  fs.mkdirSync(`wgsl_dump_output/${dirPath}`, { recursive: true });
-  console.log(`PATH IS wgsl_dump_output/${dirPath}/${sanitizedFileName}`)
-  fs.writeFileSync(`wgsl_dump_output/${dirPath}/${sanitizedFileName}`, content);
+  const fullDirPath = `wgsl_dump_output/${sanitizedDirPath}`;
+  const fullFilePath = `${fullDirPath}/${sanitizedFileName}`;
+
+  fs.mkdirSync(fullDirPath, { recursive: true });
+  console.log(`PATH IS ${fullFilePath}`);
+  fs.writeFileSync(fullFilePath, content);
 }
 
 /**
