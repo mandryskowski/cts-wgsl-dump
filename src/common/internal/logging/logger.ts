@@ -18,8 +18,10 @@ export class Logger {
   record(name: string): [TestCaseRecorder, LiveTestCaseResult] {
     const result: LiveTestCaseResult = { status: 'running', timems: -1 };
     this.results.set(name, result);
+    const recorder = new TestCaseRecorder(result, this.overriddenDebugMode ?? globalTestConfig.enableDebugLogs);
+    recorder.testName = name;
     return [
-      new TestCaseRecorder(result, this.overriddenDebugMode ?? globalTestConfig.enableDebugLogs),
+      recorder,
       result,
     ];
   }

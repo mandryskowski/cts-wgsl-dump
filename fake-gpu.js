@@ -31,12 +31,8 @@ global.GPUMapMode = {
 };
 
 global.GPUAdapter = class {};
-global.GPUDevice = class {
-    destroy() {}
-};
-global.GPUBuffer = class {
-    destroy() {}
-};
+global.GPUDevice = class { destroy() {} };
+global.GPUBuffer = class { destroy() {} };
 global.GPUQueue = class {};
 global.GPUCommandBuffer = class {};
 global.GPUCommandEncoder = class {};
@@ -52,11 +48,12 @@ global.GPURenderPipeline = class {};
 global.GPUQuerySet = class {};
 global.GPUValidationError = class extends Error {};
 global.GPUOutOfMemoryError = class extends Error {};
+global.GPUInternalError = class extends Error {};
 
 class GPU {
   constructor() {
     this.wgslLanguageFeatures = {
-      __proto__: Set.prototype,
+      proto: Set.prototype,
       size: 0
     };
   }
@@ -73,29 +70,35 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
   return {
     features: new Set(),
     requestDevice: async () => {
+      let resolveLost;
+      const lostPromise = new Promise((resolve) => { resolveLost = resolve; });
+
       return {
+        destroy: () => {
+            resolveLost({ reason: 'destroyed', message: 'Device destroyed' });
+        },
+
+        lost: lostPromise,
+
         queue: {
             submit: () => {},
             writeBuffer: () => {},
             copyExternalImageToTexture: () => {},
-            onSubmittedWorkDone: () => {},
+            onSubmittedWorkDone: async () => {},
         },
-        lost: { then: () => {} },
+
+        popErrorScope: async () => null,
         pushErrorScope: (x) => {},
-            limits: {
-        maxComputeWorkgroupStorageSize: 16384,
-        maxComputeInvocationsPerWorkgroup: 256,
-        maxComputeWorkgroupSizeX: 256,
-        maxComputeWorkgroupSizeY: 256,
-        maxComputeWorkgroupSizeZ: 64,
-        maxStorageBufferBindingSize: 134217728,
-        maxBufferSize: 268435456,
-    },
         
-        // destroy: () => { 
-        
-        
-        // },
+        limits: {
+            maxComputeWorkgroupStorageSize: 16384,
+            maxComputeInvocationsPerWorkgroup: 256,
+            maxComputeWorkgroupSizeX: 256,
+            maxComputeWorkgroupSizeY: 256,
+            maxComputeWorkgroupSizeZ: 64,
+            maxStorageBufferBindingSize: 134217728,
+            maxBufferSize: 268435456,
+        },
 
         createBuffer: (descriptor) => {
             const size = descriptor.size || 0;
@@ -104,20 +107,24 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
             return {
                 destroy: () => {},
                 mapAsync: async () => {},
-                
                 getMappedRange: (offset, rangeSize) => {
-                    return buffer; 
+                    return buffer;
                 },
-                
                 unmap: () => {},
-
                 size: size,
                 usage: descriptor.usage || 0,
             };
         },
-        createShaderModule: () => ({
-            getCompilationInfo: async () => ({ messages: [] })
-        }),
+
+        createShaderModule: (descriptor) => {
+            // console.log("--- SHADER DUMP ---");
+            // console.log(descriptor.code); 
+            // console.log("-------------------");
+            return {
+                getCompilationInfo: async () => ({ messages: [] })
+            }
+        },
+        
         createComputePipeline: (descriptor) => {
             const pipeline = new global.GPUComputePipeline();
             pipeline.getBindGroupLayout = (index) => new global.GPUBindGroupLayout();
@@ -143,7 +150,7 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
             }),
             copyBufferToBuffer: () => {},
         }),
-      }; 
+      };
     },
   };
 }, 'requestAdapter');

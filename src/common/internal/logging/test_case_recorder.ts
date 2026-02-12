@@ -45,6 +45,7 @@ export class TestCaseRecorder {
   private logs: LogMessageWithStack[] = [];
   private logLinesAtCurrentSeverity = 0;
   public debugging = false;
+  public testName: string = "unknown_test";
 
   constructor(result: LiveTestCaseResult, debugging: boolean) {
     this.result = result;
