@@ -331,6 +331,7 @@ export class GPUTestSubcaseBatchState extends SubcaseBatchState {
  * as well as helpers that use that device.
  */
 export class GPUTestBase extends Fixture<GPUTestSubcaseBatchState> {
+  public testName: string = "unknown_test";
   public static override MakeSharedState(
     recorder: TestCaseRecorder,
     params: TestParams
@@ -1438,6 +1439,8 @@ export class GPUTest extends GPUTestBase {
    */
   override get device(): GPUDevice {
     assert(this.provider !== undefined, 'internal error: DeviceProvider missing');
+    // @ts-expect-error - custom debug hook
+    this.provider.device.setTestName(this.rec.testName);
     return this.provider.device;
   }
 
