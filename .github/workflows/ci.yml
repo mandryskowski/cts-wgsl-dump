@@ -30,7 +30,9 @@ jobs:
 
       - name: Dump tests
         continue-on-error: true
-        run: node out-node/common/runtime/cmdline.js --gpu-provider $(pwd)/fake-gpu.js "webgpu:shader,execution,expression,call,builtin,*" > ./wgsl_dump_output/output.log 2>&1
+        run: |
+          mkdir -p wgsl_dump_output
+          node out-node/common/runtime/cmdline.js --gpu-provider $(pwd)/fake-gpu.js "webgpu:shader,execution,expression,call,builtin,*" > ./wgsl_dump_output/output.log 2>&1
 
       - name: Upload Dump Artifact
         if: always()
