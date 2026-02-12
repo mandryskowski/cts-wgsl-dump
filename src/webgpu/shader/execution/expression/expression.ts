@@ -1261,7 +1261,7 @@ async function buildPipeline(
   });
 
   if (!serializationError) {
-    dumpToFile(t.rec.testName, `[${expectedBytes.join(', ')}]`, '.expected.out.json');
+    dumpToFile(t.rec.testName, `{"0:0":[${expectedBytes.join(', ')}]}`, '.expected.out.json');
   } else {
     console.log(`Skipping expected output for ${t.rec.testName} since it contains non-concrete comparators`)
   }
@@ -1311,7 +1311,7 @@ async function buildPipeline(
         });
       }
 
-      dumpToFile(t.rec.testName, `[${inputData.join(', ')}]`, '.in.json');
+      dumpToFile(t.rec.testName, `{"0:1":[${inputData.join(', ')}]}`, '.in.json');
 
       // build the compute pipeline, if the shader hasn't been compiled already.
       const pipeline = getOrCreate(pipelineCache, source, () => {
