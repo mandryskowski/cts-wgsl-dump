@@ -1,3 +1,50 @@
+const fs = require('fs');
+function dumpToFile(ctsString, content, extension) {
+  const sanitizeFS = (str) => {
+    return str
+      .replace(/:/g, '_')
+      .replace(/;/g, '_')
+      .replace(/=/g, '_')
+      .replace(/"/g, '')
+      .replace(/'/g, '')
+      .replace(/[<>|*?]/g, '_')
+      .replace(/\s/g, '');
+  };
+
+  let cleanString = ctsString.replace(/^webgpu:shader,/, '');
+
+  const parts = cleanString.split(',');
+
+  const lastSegment = parts.pop();
+
+  if (!lastSegment) {
+    throw new Error("Invalid format: String is empty or missing parts.");
+  }
+
+  const firstColonIndex = lastSegment.indexOf(':');
+  
+  let finalFolderPart = lastSegment;
+  let rawFileName = 'index';
+
+  if (firstColonIndex !== -1) {
+    finalFolderPart = lastSegment.substring(0, firstColonIndex);
+    rawFileName = lastSegment.substring(firstColonIndex + 1);
+  }
+
+  parts.push(finalFolderPart);
+
+  const sanitizedDirPath = parts.map(p => sanitizeFS(p)).join('/');
+  
+  const sanitizedFileName = sanitizeFS(rawFileName) + extension;
+
+  const fullDirPath = `wgsl_dump_output/${sanitizedDirPath}`;
+  const fullFilePath = `${fullDirPath}/${sanitizedFileName}`;
+
+  fs.mkdirSync(fullDirPath, { recursive: true });
+  console.log(`PATH IS ${fullFilePath}`);
+  fs.writeFileSync(fullFilePath, content);
+}
+
 global.GPUBufferUsage = {
   MAP_READ: 0x0001,
   MAP_WRITE: 0x0002,
@@ -54,7 +101,8 @@ class GPU {
   constructor() {
     this.wgslLanguageFeatures = {
       proto: Set.prototype,
-      size: 0
+      size: 0,
+      has: (x) => {return true}
     };
   }
 }
@@ -72,6 +120,7 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
     requestDevice: async () => {
       let resolveLost;
       const lostPromise = new Promise((resolve) => { resolveLost = resolve; });
+      let testName;
 
       return {
         destroy: () => {
@@ -80,6 +129,12 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
 
         features: {
           has: (x) => {return true}
+        },
+
+        setTestName: (x) => { testName = x; },
+
+        dumpToFile: (ctsString, content, extension) => {
+          dumpToFile(ctsString, content, extension)
         },
 
         lost: lostPromise,
@@ -114,16 +169,18 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
                 getMappedRange: (offset, rangeSize) => {
                     return buffer;
                 },
-                unmap: () => {},
+                unmap: () => {
+                  if (!!descriptor.mappedAtCreation) {
+                    dumpToFile(testName, `{"0:1":[${new Uint8Array(buffer).join(', ')}]}`, '.in.json');
+                  }
+                },
                 size: size,
                 usage: descriptor.usage || 0,
             };
         },
 
         createShaderModule: (descriptor) => {
-            // console.log("--- SHADER DUMP ---");
-            // console.log(descriptor.code); 
-            // console.log("-------------------");
+            dumpToFile(testName, descriptor.code, '.wgsl');
             return {
                 getCompilationInfo: async () => ({ messages: [] })
             }

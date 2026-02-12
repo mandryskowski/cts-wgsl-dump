@@ -20,7 +20,6 @@ import { align } from '../../../util/math.js';
 
 import { Case } from './case.js';
 import { toComparator } from './expectation.js';
-import * as fs from 'fs';
 
 /** The input value source */
 export type InputSource =
@@ -1159,52 +1158,6 @@ ${body}
   };
 }
 
-function dumpToFile(ctsString: string, content: string, extension: string) {
-  const sanitizeFS = (str: string) => {
-    return str
-      .replace(/:/g, '_')
-      .replace(/;/g, '_')
-      .replace(/=/g, '_')
-      .replace(/"/g, '')
-      .replace(/'/g, '')
-      .replace(/[<>|*?]/g, '_')
-      .replace(/\s/g, '');
-  };
-
-  let cleanString = ctsString.replace(/^webgpu:shader,/, '');
-
-  const parts = cleanString.split(',');
-
-  const lastSegment = parts.pop();
-
-  if (!lastSegment) {
-    throw new Error("Invalid format: String is empty or missing parts.");
-  }
-
-  const firstColonIndex = lastSegment.indexOf(':');
-  
-  let finalFolderPart = lastSegment;
-  let rawFileName = 'index';
-
-  if (firstColonIndex !== -1) {
-    finalFolderPart = lastSegment.substring(0, firstColonIndex);
-    rawFileName = lastSegment.substring(firstColonIndex + 1);
-  }
-
-  parts.push(finalFolderPart);
-
-  const sanitizedDirPath = parts.map(p => sanitizeFS(p)).join('/');
-  
-  const sanitizedFileName = sanitizeFS(rawFileName) + extension;
-
-  const fullDirPath = `wgsl_dump_output/${sanitizedDirPath}`;
-  const fullFilePath = `${fullDirPath}/${sanitizedFileName}`;
-
-  fs.mkdirSync(fullDirPath, { recursive: true });
-  console.log(`PATH IS ${fullFilePath}`);
-  fs.writeFileSync(fullFilePath, content);
-}
-
 /**
  * Constructs and returns a GPUComputePipeline and GPUBindGroup for running a
  * batch of test cases. If a pre-created pipeline can be found in
@@ -1237,7 +1190,6 @@ async function buildPipeline(
   });
 
   const source = shaderBuilder(shaderBuilderParams);
-  dumpToFile(t.rec.testName, source, '.wgsl');
 
   const outStride = structStride([shaderBuilderParams.resultType], 'storage_rw');
   const outBufferSize = align(cases.length * outStride, 4);
@@ -1261,7 +1213,8 @@ async function buildPipeline(
   });
 
   if (!serializationError) {
-    dumpToFile(t.rec.testName, `{"0:0":[${expectedBytes.join(', ')}]}`, '.expected.out.json');
+    // @ts-expect-error - custom debug hook
+    t.device.dumpToFile(t.rec.testName, `{"0:0":[${expectedBytes.join(', ')}]}`, '.expected.out.json');
   } else {
     console.log(`Skipping expected output for ${t.rec.testName} since it contains non-concrete comparators`)
   }
@@ -1310,8 +1263,6 @@ async function buildPipeline(
           }
         });
       }
-
-      dumpToFile(t.rec.testName, `{"0:1":[${inputData.join(', ')}]}`, '.in.json');
 
       // build the compute pipeline, if the shader hasn't been compiled already.
       const pipeline = getOrCreate(pipelineCache, source, () => {
