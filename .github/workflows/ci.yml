@@ -1,0 +1,49 @@
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout git repo
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run grunt build
+        run: npx grunt node
+
+      - name: Dump tests
+        continue-on-error: true
+        run: |
+          mkdir -p wgsl_dump_output
+          node out-node/common/runtime/cmdline.js --gpu-provider $(pwd)/fake-gpu.js "webgpu:shader,execution,*"
+
+      - name: Upload Dump Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wgsl-dump-output
+          path: ./wgsl_dump_output
+      # - name: Upload artifacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: dawn-static-${{ matrix.target }}
+      #     path: |
+      #       build/gen/**/*
+      #       build/lib/**/*
