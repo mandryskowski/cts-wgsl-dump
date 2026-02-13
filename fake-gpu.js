@@ -1,5 +1,7 @@
 const fs = require('fs');
-function dumpToFile(ctsString, content, extension) {
+const path = require('path');
+const { description } = require('./out-node/webgpu/shader/execution/expression/call/builtin/subgroupAdd.spec');
+function dumpToFile(ctsString, content, extension, mergeFunction = null) {
   const sanitizeFS = (str) => {
     return str
       .replace(/:/g, '_')
@@ -13,36 +15,37 @@ function dumpToFile(ctsString, content, extension) {
 
   let cleanString = ctsString.replace(/^webgpu:shader,/, '');
 
-  const parts = cleanString.split(',');
+  const segments = cleanString.split(':');
 
-  const lastSegment = parts.pop();
-
-  if (!lastSegment) {
-    throw new Error("Invalid format: String is empty or missing parts.");
-  }
-
-  const firstColonIndex = lastSegment.indexOf(':');
-  
-  let finalFolderPart = lastSegment;
   let rawFileName = 'index';
+  let folderParts = [];
 
-  if (firstColonIndex !== -1) {
-    finalFolderPart = lastSegment.substring(0, firstColonIndex);
-    rawFileName = lastSegment.substring(firstColonIndex + 1);
+  if (segments.length > 0) {
+    rawFileName = segments.pop();
+
+    segments.forEach(segment => {
+      const subDirs = segment.split(',');
+      folderParts.push(...subDirs);
+    });
   }
 
-  parts.push(finalFolderPart);
-
-  const sanitizedDirPath = parts.map(p => sanitizeFS(p)).join('/');
-  
+  const sanitizedDirPath = folderParts.map(p => sanitizeFS(p)).join('/');
   const sanitizedFileName = sanitizeFS(rawFileName) + extension;
 
   const fullDirPath = `wgsl_dump_output/${sanitizedDirPath}`;
-  const fullFilePath = `${fullDirPath}/${sanitizedFileName}`;
+  const fullFilePath = path.join(fullDirPath, sanitizedFileName);
 
   fs.mkdirSync(fullDirPath, { recursive: true });
   console.log(`PATH IS ${fullFilePath}`);
-  fs.writeFileSync(fullFilePath, content);
+  console.log(`TESTNAME IS ${ctsString}`);
+
+  if (typeof mergeFunction === 'function' && fs.existsSync(fullFilePath)) {
+    let previousContent = fs.readFileSync(fullFilePath, 'utf8');
+    const finalContent = mergeFunction(previousContent, content);
+    fs.writeFileSync(fullFilePath, finalContent);
+  } else {
+    fs.writeFileSync(fullFilePath, content);
+  }
 }
 
 global.GPUBufferUsage = {
@@ -77,13 +80,67 @@ global.GPUMapMode = {
   WRITE: 0x0002,
 };
 
+GPUAdapterInfo = {
+  vendor: "fake",
+  architecture: "fake",
+  description: "fake",
+  subgroupMinSize: 1,
+  subgroupMaxSize: 256,
+  isFallbackAdapter: false,
+},
+GPUSupportedLimits = {
+    maxTextureDimension1D: 8192,
+    maxTextureDimension2D: 8192,
+    maxTextureDimension3D:  2048,
+    maxTextureArrayLayers: 256,
+    maxBindGroups: 4,
+    maxBindGroupsPlusVertexBuffers: 24,
+    maxBindingsPerBindGroup: 1000,
+    maxDynamicUniformBuffersPerPipelineLayout: 8,
+    maxDynamicStorageBuffersPerPipelineLayout: 4,
+    maxSampledTexturesPerShaderStage: 16,
+    maxSamplersPerShaderStage: 16,
+    maxStorageBuffersPerShaderStage: 8,
+    maxStorageBuffersInVertexStage: 8,
+    maxStorageBuffersInFragmentStage: 8,
+    maxStorageTexturesPerShaderStage: 4,
+    maxStorageTexturesInVertexStage: 4,
+    maxStorageTexturesInFragmentStage: 12,
+    maxUniformBuffersPerShaderStage: 65536,
+    maxUniformBufferBindingSize: 134217728,
+    maxStorageBufferBindingSize: 256,
+    minUniformBufferOffsetAlignment: 8,
+    minStorageBufferOffsetAlignment: 268435456,
+    maxVertexBuffers: 16,
+    maxBufferSize: 2048,
+    maxVertexAttributes: 16, 
+    maxVertexBufferArrayStride: 2048,
+    maxInterStageShaderVariables: 16,
+    maxColorAttachments: 8,
+    maxColorAttachmentBytesPerSample: 32,
+    maxComputeWorkgroupStorageSize: 16384,
+    maxComputeInvocationsPerWorkgroup: 256,
+    maxComputeWorkgroupSizeX: 256,
+    maxComputeWorkgroupSizeY: 256,
+    maxComputeWorkgroupSizeZ: 256,
+    maxComputeWorkgroupsPerDimension: 65535,
+}
+
+global.GPUQueue = {
+  submit: () => {},
+  onSubmittedWorkDone: async () => {},
+  writeBuffer: () => {},
+  writeTexture: (a,b,c,d) => {},
+  copyExternalImageToTexture: () => {},
+}
+
 global.GPUAdapter = class {};
 global.GPUDevice = class { destroy() {} };
 global.GPUBuffer = class { destroy() {} };
-global.GPUQueue = class {};
 global.GPUCommandBuffer = class {};
 global.GPUCommandEncoder = class {};
 global.GPUTexture = class {};
+global.GPUExternalTexture = class {};
 global.GPUTextureView = class {};
 global.GPUSampler = class {};
 global.GPUBindGroupLayout = class {};
@@ -117,12 +174,18 @@ function makeNative(func, name) {
 GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
   return {
     features: new Set(),
+    limits: GPUSupportedLimits,
+    queue: GPUQueue,
     requestDevice: async () => {
       let resolveLost;
       const lostPromise = new Promise((resolve) => { resolveLost = resolve; });
       let testName;
+      let testOccurences = new Map();
 
       return {
+        adapterInfo: GPUAdapterInfo,
+        limits: GPUSupportedLimits,
+        queue: GPUQueue,
         destroy: () => {
             resolveLost({ reason: 'destroyed', message: 'Device destroyed' });
         },
@@ -139,25 +202,8 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
 
         lost: lostPromise,
 
-        queue: {
-            submit: () => {},
-            writeBuffer: () => {},
-            copyExternalImageToTexture: () => {},
-            onSubmittedWorkDone: async () => {},
-        },
-
         popErrorScope: async () => null,
         pushErrorScope: (x) => {},
-        
-        limits: {
-            maxComputeWorkgroupStorageSize: 16384,
-            maxComputeInvocationsPerWorkgroup: 256,
-            maxComputeWorkgroupSizeX: 256,
-            maxComputeWorkgroupSizeY: 256,
-            maxComputeWorkgroupSizeZ: 64,
-            maxStorageBufferBindingSize: 134217728,
-            maxBufferSize: 268435456,
-        },
 
         createBuffer: (descriptor) => {
             const size = descriptor.size || 0;
@@ -169,17 +215,39 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
                 getMappedRange: (offset, rangeSize) => {
                     return buffer;
                 },
-                unmap: () => {
+                unmap() {
                   if (!!descriptor.mappedAtCreation) {
-                    dumpToFile(testName, `{"0:1":[${new Uint8Array(buffer).join(', ')}]}`, '.in.json');
+                    this.data = new Uint8Array(buffer);
                   }
                 },
                 size: size,
                 usage: descriptor.usage || 0,
+                data: null
             };
         },
 
+        createTexture: (descriptor) => {
+          return {
+            width: descriptor.size.width || descriptor.size[0],
+            height: descriptor.size.height || descriptor.size[1] || 1,
+            depthOrArrayLayers: descriptor.size.depthOrArrayLayers || descriptor.size[2] || 1,
+            mipLevelCount: descriptor.mipLevelCount || 1,
+            sampleCount: descriptor.sampleCount || 1, 
+            dimension: descriptor.dimension || "2d",
+            format: descriptor.format,
+            usage: descriptor.usage,
+            createView: (view_descriptor) => {
+            }
+        };},
+
+        createSampler: (descriptor) => {
+          return {
+            descriptor: descriptor,
+          }
+        },
+
         createShaderModule: (descriptor) => {
+            testOccurences[testName] = (testOccurences[testName] || 0) + 1;
             dumpToFile(testName, descriptor.code, '.wgsl');
             return {
                 getCompilationInfo: async () => ({ messages: [] })
@@ -200,7 +268,17 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
 
         createBindGroupLayout: () => new global.GPUBindGroupLayout(),
         createPipelineLayout: () => new global.GPUPipelineLayout(),
-        createBindGroup: () => {},
+        createBindGroup: (x) => {
+          for (const entry of x.entries) {
+            if (!!entry.resource && !!entry.resource.buffer && entry.resource.buffer.data !== null) {
+              const extension = testOccurences[testName] == 1 ? '.in.json' : `.in${testOccurences[testName]}.json`;
+              dumpToFile(testName, `{"0:${entry.binding}": [${entry.resource.buffer.data.join(', ')}]}`, extension,
+                (prev, cur) => { return "{" + prev.substring(1, prev.length-1) + ", " + cur.substring(1, cur.length-1) + "}"; }
+              );
+            }
+          }
+          return new global.GPUBindGroupLayout();
+        },
         createCommandEncoder: () => ({
             finish: () => ({}),
             beginComputePass: () => ({
@@ -210,7 +288,13 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
                 end: () => {},
             }),
             copyBufferToBuffer: () => {},
+            copyBufferToTexture: () => {},
         }),
+        createRenderPipeline: () => {
+          return {
+            getBindGroupLayout: (index) => {}
+          }
+        }
       };
     },
   };
