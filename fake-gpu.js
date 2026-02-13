@@ -168,7 +168,6 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
         createBuffer: (descriptor) => {
             const size = descriptor.size || 0;
             const buffer = new ArrayBuffer(size);
-            console.log(descriptor)
 
             return {
                 destroy: () => {},
@@ -209,7 +208,6 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
         createBindGroupLayout: () => new global.GPUBindGroupLayout(),
         createPipelineLayout: () => new global.GPUPipelineLayout(),
         createBindGroup: (x) => {
-          console.log("dupa", x.entries);
           for (const entry of x.entries) {
             if (entry.resource.buffer.data !== null) {
               dumpToFile(testName, `{"0:${entry.binding}": [${entry.resource.buffer.data.join(', ')}]}`, '.in.json',
