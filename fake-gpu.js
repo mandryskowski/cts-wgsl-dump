@@ -156,6 +156,7 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
             maxComputeWorkgroupSizeY: 256,
             maxComputeWorkgroupSizeZ: 64,
             maxStorageBufferBindingSize: 134217728,
+            maxUniformBufferBindingSize: 65536,
             maxBufferSize: 268435456,
         },
 
