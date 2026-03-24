@@ -30,6 +30,8 @@ jobs:
 
       - name: Dump tests
         continue-on-error: true
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
         run: |
           mkdir -p wgsl_dump_output
           node out-node/common/runtime/cmdline.js --gpu-provider $(pwd)/fake-gpu.js "webgpu:shader,*"
