@@ -1,6 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { description } = require('./out-node/webgpu/shader/execution/expression/call/builtin/subgroupAdd.spec');
+
+process.on('uncaughtException', (err) => {
+  console.warn('\nIgnored uncaught exception:', err.message);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('\nIgnored unhandled rejection:', reason);
+});
 function dumpToFile(ctsString, content, extension, mergeFunction = null) {
   const sanitizeFS = (str) => {
     return str
@@ -129,7 +136,15 @@ GPUSupportedLimits = {
 global.GPUQueue = {
   submit: () => {},
   onSubmittedWorkDone: async () => {},
-  writeBuffer: () => {},
+    writeBuffer: (buffer, bufferOffset, data, dataOffset, size) => {
+    if (!buffer.data) {
+      buffer.data = new Uint8Array(buffer.size);
+    }
+    const srcOffset = dataOffset || 0;
+    const srcLength = size !== undefined ? size : data.byteLength - srcOffset;
+    const src = new Uint8Array(data.buffer || data, (data.byteOffset || 0) + srcOffset, srcLength);
+    buffer.data.set(src, bufferOffset || 0);
+  },
   writeTexture: (a,b,c,d) => {},
   copyExternalImageToTexture: () => {},
 }
@@ -208,6 +223,13 @@ GPU.prototype.requestAdapter = makeNative(async function requestAdapter() {
         createBuffer: (descriptor) => {
             const size = descriptor.size || 0;
             const buffer = new ArrayBuffer(size);
+
+            if (descriptor.usage & global.GPUBufferUsage.MAP_READ) {
+                const f32 = new Float32Array(buffer);
+                for (let i = 0; i < f32.length; i++) {
+                    f32[i] = i % 2 === 0 ? 1.0 : 0.0;
+                }
+            }
 
             return {
                 destroy: () => {},
